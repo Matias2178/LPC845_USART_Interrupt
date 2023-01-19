@@ -43,20 +43,39 @@
 /* TODO: insert other include files here. */
 
 /* TODO: insert other definitions and declarations here. */
-
+char frase[] = "hola mundo.";
+char *p = &frase;
 
 
 
 /* USART0_IRQn interrupt handler */
 void USART0_USART_IRQHANDLER(void) {
-	uint8_t dato;
+	uint8_t dato, d1, d2;
   /*  Place your code here */
 	/* Consultamos si llego un dato	 */
 	if(USART_GetStatusFlags(USART0_PERIPHERAL) && kUSART_RxReady){
-			dato = USART_ReadByte(USART0_PERIPHERAL);
-			USART_WriteByte(USART0_PERIPHERAL, dato);
-
+		dato = USART_ReadByte(USART0_PERIPHERAL);
+		if(dato == 'h'){
+			USART_WriteByte(USART0_PERIPHERAL, *p);
+			p++;
+			USART_EnableInterrupts(USART0_PERIPHERAL, kUSART_TxReadyInterruptEnable);
+		}
 	}
+	d1 = (USART_GetStatusFlags(USART0_PERIPHERAL) && kUSART_TxReady);
+
+	d2 = (USART_GetEnabledInterrupts(USART0_PERIPHERAL) && kUSART_TxReadyInterruptEnable);
+
+	if((USART_GetStatusFlags(USART0_PERIPHERAL) && kUSART_TxReady) &&
+	   (USART_GetEnabledInterrupts(USART0_PERIPHERAL) && kUSART_TxReadyInterruptEnable)){
+		USART_WriteByte(USART0_PERIPHERAL, *p);
+		p++;
+		if(*p == '.'){
+			USART_DisableInterrupts(USART0_PERIPHERAL, kUSART_TxReadyInterruptEnable);
+			p = &frase;
+		}
+	}
+
+
 
 
   /* Add for ARM errata 838869, affects Cortex-M4, Cortex-M4F
