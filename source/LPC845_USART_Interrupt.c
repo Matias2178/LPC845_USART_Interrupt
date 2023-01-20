@@ -39,39 +39,45 @@
 #include "clock_config.h"
 #include "LPC845.h"
 #include "fsl_usart.h"
-#include "fsl_ctimer.h"
+#include "fifo.h"
 /* TODO: insert other include files here. */
 
 /* TODO: insert other definitions and declarations here. */
-char frase[] = "hola mundo.";
-char *p = &frase;
 
+char transmit = false;
+char dato;
 
+/*Variable FIFOs definitions */
+#define GPS_BUFFER_SIZE 25
+unsigned char GPS_Buffer[GPS_BUFFER_SIZE];
+union _flag GPS_Flag;
+struct _index GPS_Index;
+#define GPS_FIFO_Empty FIFO_Empty(&GPS_Flag)
+#define GPS_FIFO_Transmit_Set FIFO_Transmit_Set(&GPS_Flag)
+#define GPS_FIFO_Transmit_Clear FIFO_Transmit_Clear(&GPS_Flag)
+#define GPS_FIFO_Transmit_Get FIFO_Transmit_Get(&GPS_Flag)
 
 /* USART0_IRQn interrupt handler */
 void USART0_USART_IRQHANDLER(void) {
-	uint8_t dato, d1, d2;
+
   /*  Place your code here */
 	/* Consultamos si llego un dato	 */
-	if(USART_GetStatusFlags(USART0_PERIPHERAL) && kUSART_RxReady){
+	if(USART_GetStatusFlags(USART0_PERIPHERAL) & kUSART_RxReady){
 		dato = USART_ReadByte(USART0_PERIPHERAL);
-		if(dato == 'h'){
-			USART_WriteByte(USART0_PERIPHERAL, *p);
-			p++;
+		FIFO_Write(&GPS_Flag, &GPS_Index, GPS_BUFFER_SIZE, GPS_Buffer, dato);
+
+		if(dato == 0x0D){
 			USART_EnableInterrupts(USART0_PERIPHERAL, kUSART_TxReadyInterruptEnable);
+			USART_WriteByte(USART0_PERIPHERAL, FIFO_Read(&GPS_Flag, &GPS_Index, GPS_BUFFER_SIZE, GPS_Buffer));
+			GPS_FIFO_Transmit_Set;
 		}
 	}
-	d1 = (USART_GetStatusFlags(USART0_PERIPHERAL) && kUSART_TxReady);
 
-	d2 = (USART_GetEnabledInterrupts(USART0_PERIPHERAL) && kUSART_TxReadyInterruptEnable);
-
-	if((USART_GetStatusFlags(USART0_PERIPHERAL) && kUSART_TxReady) &&
-	   (USART_GetEnabledInterrupts(USART0_PERIPHERAL) && kUSART_TxReadyInterruptEnable)){
-		USART_WriteByte(USART0_PERIPHERAL, *p);
-		p++;
-		if(*p == '.'){
+	if((USART_GetStatusFlags(USART0_PERIPHERAL) & kUSART_TxReady) && GPS_FIFO_Transmit_Get && (USART_GetEnabledInterrupts(USART0_PERIPHERAL) & kUSART_TxReadyInterruptEnable)){
+		USART_WriteByte(USART0_PERIPHERAL, FIFO_Read(&GPS_Flag, &GPS_Index, GPS_BUFFER_SIZE, GPS_Buffer));
+		if(GPS_FIFO_Empty){
 			USART_DisableInterrupts(USART0_PERIPHERAL, kUSART_TxReadyInterruptEnable);
-			p = &frase;
+			GPS_FIFO_Transmit_Clear;
 		}
 	}
 
@@ -94,6 +100,7 @@ int main(void) {
     BOARD_InitBootPins();
     BOARD_InitBootClocks();
     BOARD_InitBootPeripherals();
+    FIFO_Init(&GPS_Flag, &GPS_Index);
 
 
     /* Force the counter to be placed into memory. */
